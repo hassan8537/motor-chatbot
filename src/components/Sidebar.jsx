@@ -40,48 +40,60 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
 
     setIsLoading(true);
     try {
+      // Step 1: Get presigned URL
       const presignRes = await fetch(`${BASE_URL}/api/v1/uploads/s3`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ key: file.name, fileType: file.type })
+        body: JSON.stringify({ key: file.name, fileType: file.type }),
       });
       const { data } = await presignRes.json();
+      alert("✅ Step 1: Presigned URL retrieved");
+
+      // Step 2: Upload to S3
       const uploadRes = await fetch(data.url, {
         method: "PUT",
         headers: { "Content-Type": file.type },
-        body: file
+        body: file,
       });
       if (!uploadRes.ok) throw new Error("Upload failed");
+      alert("✅ Step 2: File uploaded to S3");
 
+      // Step 3: Start Textract analysis
       const textractRes = await fetch(`${BASE_URL}/api/v1/textract/start`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ key: data.key })
+        body: JSON.stringify({ key: data.key }),
       });
       const textractStart = await textractRes.json();
       if (textractStart.status !== 1)
         throw new Error("Textract analysis failed");
+      alert("✅ Step 3: Textract analysis started");
 
+      // Step 4: Fetch Textract results
       const resultRes = await fetch(`${BASE_URL}/api/v1/textract/results`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           textJobId: textractStart.data.textJobId,
           analysisJobId: textractStart.data.analysisJobId,
-          collectionName: "document_embeddings"
-        })
+          collectionName: "document_embeddings",
+        }),
       });
       const result = await resultRes.json();
       if (result.status !== 1) throw new Error("Textract results failed");
+      alert("✅ Step 4: Textract results retrieved");
+
+      // Final success
+      alert("🎉 All processing completed successfully!");
     } catch (err) {
       console.error("Upload error:", err);
       alert("❌ An error occurred while uploading or processing the file.");
@@ -106,7 +118,7 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
       );
 
     fetch(`${BASE_URL}/api/v1/uploads/s3`, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
       .then((data) => {
@@ -129,7 +141,7 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
         overflow: "hidden",
         transition: "width 0.3s",
         display: "flex",
-        flexDirection: "column"
+        flexDirection: "column",
       }}
     >
       <div
@@ -138,7 +150,7 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
           padding: 16,
           display: "flex",
           justifyContent: "space-between",
-          borderBottom: "1px solid #444654"
+          borderBottom: "1px solid #444654",
         }}
       >
         <button
@@ -147,7 +159,7 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
             background: "none",
             border: "none",
             color: "white",
-            fontSize: 24
+            fontSize: 24,
           }}
         >
           <TbSquareToggle />
@@ -161,7 +173,7 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
             borderRadius: 6,
             color: "white",
             padding: 10,
-            fontWeight: "bold"
+            fontWeight: "bold",
           }}
         >
           Upload
@@ -182,7 +194,7 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
             marginTop: 16,
             padding: 8,
             backgroundColor: "#343541",
-            borderRadius: 6
+            borderRadius: 6,
           }}
         >
           <p style={{ margin: 0, fontWeight: "bold" }}>Document Preview:</p>
@@ -212,7 +224,7 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
             backgroundColor: "#343541",
             color: "white",
             textAlign: "center",
-            borderRadius: 6
+            borderRadius: 6,
           }}
         >
           <div
@@ -231,7 +243,7 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
           overflowY: "auto",
           padding: 12,
           border: "1px solid #ccc",
-          borderRadius: 8
+          borderRadius: 8,
         }}
       >
         {loading ? (
@@ -256,7 +268,7 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
                 padding: 0,
                 display: "flex",
                 flexDirection: "column",
-                gap: 8
+                gap: 8,
               }}
             >
               {items.length === 0 && <li>No documents yet</li>}
@@ -270,7 +282,7 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
                     borderRadius: 4,
                     cursor: "pointer",
                     userSelect: "none",
-                    color: "white"
+                    color: "white",
                   }}
                 >
                   <p style={{ wordWrap: "break-word", margin: 0 }}>
@@ -294,7 +306,7 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
             color: "white",
             padding: 10,
             fontWeight: "bold",
-            marginBottom: 10
+            marginBottom: 10,
           }}
         >
           Home
@@ -309,7 +321,7 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
             borderRadius: 6,
             color: "white",
             padding: 10,
-            fontWeight: "bold"
+            fontWeight: "bold",
           }}
         >
           Chat
@@ -321,7 +333,7 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
           padding: 16,
           fontSize: 14,
           borderTop: "1px solid #444654",
-          textAlign: "center"
+          textAlign: "center",
         }}
       >
         <div>© 2025 Your Name</div>
