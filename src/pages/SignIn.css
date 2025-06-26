@@ -1,0 +1,11 @@
+ .sign-in-screen {
+  height: 100vh;
+  width: 100%;
+}
+
+.sign-in-screen {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
