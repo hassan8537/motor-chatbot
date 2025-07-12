@@ -9,61 +9,71 @@ export default function Chat({ onOpenSidebar, sidebarOpen, onSendMessage }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [chatsLoading, setChatsLoading] = useState(true);
+  const [paginationLoading, setPaginationLoading] = useState(false);
   const [myChats, setMyChats] = useState([]);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [nextPageToken, setNextPageToken] = useState(null);
+  const [hasMoreChats, setHasMoreChats] = useState(true);
+
   const textareaRef = useRef(null);
   const chatContainerRef = useRef(null);
   const token = Cookies.get("token");
 
+  const fetchChats = async (pagination = false) => {
+    if (pagination && (!hasMoreChats || paginationLoading)) return;
+
+    const url = new URL(`${BASE_URL}/api/v1/qdrant/chats`);
+    if (pagination && nextPageToken) url.searchParams.append("next", nextPageToken);
+
+    try {
+      if (pagination) setPaginationLoading(true);
+      else setChatsLoading(true);
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      const newChats = data?.data?.chats || [];
+
+      setMyChats((prev) => (pagination ? [...newChats, ...prev] : newChats));
+      setNextPageToken(data?.data?.nextPageToken || null);
+      setHasMoreChats(Boolean(data?.data?.nextPageToken));
+    } catch (error) {
+      console.error("Fetch failed:", error);
+    } finally {
+      setChatsLoading(false);
+      setPaginationLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchChats = async () => {
-      try {
-        const response = await fetch(`${BASE_URL}/api/v1/qdrant/chats`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          }
-        });
-
-        const data = await response.json();
-        setMyChats(data?.data?.chats);
-      } catch (error) {
-        console.error("Fetch failed:", error);
-      } finally {
-        setChatsLoading(false);
-      }
-    };
-
-    fetchChats();
+    if (token) fetchChats(false);
   }, [token]);
 
   const sendMessage = async () => {
-    if (!input.trim()) return;
+    const trimmed = input.trim();
+    if (!trimmed) return;
+
     setLoading(true);
+    const userMsg = { query: trimmed, answer: "..." };
+    setMyChats((prev) => [...prev, userMsg]);
 
     try {
-      const userMsg = { query: input.trim(), answer: "..." };
-      setMyChats((prev) => [...prev, userMsg]);
-
-      const response = await onSendMessage(input.trim());
-
+      const response = await onSendMessage(trimmed);
       const answer = response?.data?.answer || "No response from bot.";
-
       setMyChats((prev) => {
         const updated = [...prev];
-        updated[updated.length - 1] = {
-          ...updated[updated.length - 1],
-          answer
-        };
+        updated[updated.length - 1] = { ...updated[updated.length - 1], answer };
         return updated;
       });
-
-      setInput("");
     } catch (error) {
       console.error("Send failed:", error);
       alert("Failed to send message.");
     } finally {
+      setInput("");
       setLoading(false);
     }
   };
@@ -76,20 +86,39 @@ export default function Chat({ onOpenSidebar, sidebarOpen, onSendMessage }) {
   }, [input]);
 
   useEffect(() => {
-    // Scroll to bottom on chat update
-    chatContainerRef.current?.scrollTo({
-      top: chatContainerRef.current.scrollHeight,
-      behavior: "smooth"
-    });
+    const container = chatContainerRef.current;
+    if (!container || paginationLoading) return;
+  
+    const isNearBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+  
+    if (isNearBottom || loading) {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: "smooth"
+      });
+    }
   }, [myChats]);
+  
 
   const handleScroll = () => {
-    if (!chatContainerRef.current) return;
     const container = chatContainerRef.current;
-    setShowScrollButton(
-      container.scrollHeight - container.scrollTop - container.clientHeight >
-        100
-    );
+    if (!container) return;
+
+    const atTop = container.scrollTop < 100;
+    const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+
+    if (atTop && !paginationLoading && hasMoreChats) {
+      const prevScrollHeight = container.scrollHeight;
+      fetchChats(true).then(() => {
+        requestAnimationFrame(() => {
+          const newScrollHeight = container.scrollHeight;
+          container.scrollTop = newScrollHeight - prevScrollHeight;
+        });
+      });
+    }
+
+    setShowScrollButton(!atBottom);
   };
 
   return (
@@ -186,9 +215,14 @@ export default function Chat({ onOpenSidebar, sidebarOpen, onSendMessage }) {
             </React.Fragment>
           ))
         )}
+
+        {paginationLoading && (
+          <p style={{ color: "#888", textAlign: "center", fontSize: "14px" }}>
+            Loading more...
+          </p>
+        )}
       </div>
 
-      {/* Scroll-to-bottom Button */}
       {showScrollButton && (
         <button
           onClick={() =>
@@ -216,16 +250,14 @@ export default function Chat({ onOpenSidebar, sidebarOpen, onSendMessage }) {
           }}
           title="Scroll to bottom"
         >
-          <IoIosArrowDown style={{ fontSize: "32px", color: "#ffffff" }} />
+          <IoIosArrowDown style={{ fontSize: "32px", color: "#fff" }} />
         </button>
       )}
 
-      {/* Input Area */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
           sendMessage();
-          setInput("");
         }}
         style={{
           display: "flex",
@@ -259,7 +291,6 @@ export default function Chat({ onOpenSidebar, sidebarOpen, onSendMessage }) {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               sendMessage();
-              setInput("");
             }
           }}
         />
