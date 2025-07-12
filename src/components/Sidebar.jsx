@@ -41,6 +41,8 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
 
     setIsLoading(true);
     try {
+      console.log("File details:", { name: file.name, type: file.type, size: file.size });
+
       // Step 1: Get presigned URL
       const presignRes = await fetch(`${BASE_URL}/api/v1/uploads/s3`, {
         method: "POST",
@@ -48,17 +50,40 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ key: file.name, fileType: file.type }),
+        body: JSON.stringify({
+          key: file.name,
+          fileType: file.type,
+          // Add file size if your backend expects it
+          fileSize: file.size
+        }),
       });
-      const { data } = await presignRes.json();
 
-      // Step 2: Upload to S3
+      if (!presignRes.ok) {
+        throw new Error(`Presigned URL request failed: ${presignRes.status}`);
+      }
+
+      const presignData = await presignRes.json();
+      console.log("Presigned URL response:", presignData);
+
+      const { data } = presignData;
+
+      // Step 2: Upload to S3 - Make sure Content-Type matches exactly
       const uploadRes = await fetch(data.url, {
         method: "PUT",
-        headers: { "Content-Type": file.type },
+        headers: {
+          "Content-Type": file.type,
+          // Don't add any other headers that might interfere
+        },
         body: file,
       });
-      if (!uploadRes.ok) throw new Error("Upload failed");
+
+      console.log("S3 upload response:", uploadRes.status, uploadRes.statusText);
+
+      if (!uploadRes.ok) {
+        const errorText = await uploadRes.text();
+        console.error("S3 upload error response:", errorText);
+        throw new Error(`S3 upload failed: ${uploadRes.status} - ${errorText}`);
+      }
 
       // Step 3: Start Textract analysis
       const textractRes = await fetch(`${BASE_URL}/api/v1/textract/start`, {
@@ -69,9 +94,11 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
         },
         body: JSON.stringify({ key: data.key }),
       });
+
       const textractStart = await textractRes.json();
-      if (textractStart.status !== 1)
+      if (textractStart.status !== 1) {
         throw new Error("Textract analysis failed");
+      }
 
       // Step 4: Fetch Textract results
       const resultRes = await fetch(`${BASE_URL}/api/v1/textract/results`, {
@@ -84,24 +111,23 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
           textJobId: textractStart.data.textJobId,
           analysisJobId: textractStart.data.analysisJobId,
           collectionName: "document_embeddings",
+          key: data.key,
         }),
       });
+
       const result = await resultRes.json();
-      if (result.status !== 1) throw new Error("Textract results failed");
+      if (result.status !== 1) {
+        throw new Error("Textract results failed");
+      }
 
-      // Only show success alert when everything is completely done
       alert("✅ File uploaded and processed successfully!");
-
-      // Refresh the file list to show the new file immediately
       await refreshFileList();
-
-      // Clear the document preview after successful upload
       setUploadedFile(null);
       setPreviewUrl(null);
 
     } catch (err) {
       console.error("Upload error:", err);
-      alert("❌ An error occurred while uploading or processing the file.");
+      alert(`❌ Upload failed: ${err.message}`);
     } finally {
       setIsLoading(false);
     }

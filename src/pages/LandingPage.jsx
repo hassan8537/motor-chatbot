@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { useEffect, useState } from "react";
 import Cookies from "js-cookie";
+import BASE_URL from "../config";
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -38,7 +39,7 @@ export default function LandingPage() {
     const fetchQueryStats = async () => {
       try {
         const queryRes = await fetch(
-          `https://ikfwwxazldg56elyxpxqutixd40kiecd.lambda-url.us-east-1.on.aws/api/v1/charts/queries/count?startDate=${formatDate(
+          `${BASE_URL}/api/v1/charts/queries/count?startDate=${formatDate(
             filters.startDate
           )}&endDate=${formatDate(filters.endDate)}`,
           {
@@ -57,7 +58,7 @@ export default function LandingPage() {
     const fetchTokenStats = async () => {
       try {
         const usageRes = await fetch(
-          `https://ikfwwxazldg56elyxpxqutixd40kiecd.lambda-url.us-east-1.on.aws/api/v1/charts/openai/usage?startDate=${formatDate(
+          `${BASE_URL}/api/v1/charts/openai/usage?startDate=${formatDate(
             filters.startDate
           )}&endDate=${formatDate(filters.endDate)}`,
           {
@@ -234,8 +235,8 @@ export default function LandingPage() {
             transition: "all 0.3s ease-in-out"
           }}
           onMouseEnter={(e) =>
-            (e.currentTarget.style.boxShadow =
-              "0 4px 20px rgba(16, 163, 127, 0.4)")
+          (e.currentTarget.style.boxShadow =
+            "0 4px 20px rgba(16, 163, 127, 0.4)")
           }
           onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "none")}
         >
