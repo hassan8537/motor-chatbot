@@ -3,6 +3,7 @@ import { TbSquareToggle, TbPlus } from "react-icons/tb";
 import Cookies from "js-cookie";
 import { useNavigate } from "react-router-dom";
 import BASE_URL from "../config";
+import { FiTrash } from "react-icons/fi";
 
 export default function Sidebar({ isOpen, onClose, onNewChat }) {
   const fileInputRef = useRef(null);
@@ -50,7 +51,6 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
         body: JSON.stringify({ key: file.name, fileType: file.type }),
       });
       const { data } = await presignRes.json();
-      alert("✅ Step 1: Presigned URL retrieved");
 
       // Step 2: Upload to S3
       const uploadRes = await fetch(data.url, {
@@ -59,7 +59,6 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
         body: file,
       });
       if (!uploadRes.ok) throw new Error("Upload failed");
-      alert("✅ Step 2: File uploaded to S3");
 
       // Step 3: Start Textract analysis
       const textractRes = await fetch(`${BASE_URL}/api/v1/textract/start`, {
@@ -73,7 +72,6 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
       const textractStart = await textractRes.json();
       if (textractStart.status !== 1)
         throw new Error("Textract analysis failed");
-      alert("✅ Step 3: Textract analysis started");
 
       // Step 4: Fetch Textract results
       const resultRes = await fetch(`${BASE_URL}/api/v1/textract/results`, {
@@ -90,15 +88,93 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
       });
       const result = await resultRes.json();
       if (result.status !== 1) throw new Error("Textract results failed");
-      alert("✅ Step 4: Textract results retrieved");
 
-      // Final success
-      alert("🎉 All processing completed successfully!");
+      // Only show success alert when everything is completely done
+      alert("✅ File uploaded and processed successfully!");
+
+      // Refresh the file list to show the new file immediately
+      await refreshFileList();
+
+      // Clear the document preview after successful upload
+      setUploadedFile(null);
+      setPreviewUrl(null);
+
     } catch (err) {
       console.error("Upload error:", err);
       alert("❌ An error occurred while uploading or processing the file.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Function to refresh the file list
+  const refreshFileList = async () => {
+    const token = Cookies.get("token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${BASE_URL}/api/v1/uploads/s3`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setItems(Array.isArray(data.data) ? data.data : []);
+    } catch (err) {
+      console.error("Error refreshing file list:", err);
+    }
+  };
+
+  // Optimized function to handle file deletion
+  const handleDelete = async (fileKey) => {
+    const token = Cookies.get("token");
+    if (!token) return alert("Authentication token not found. Please sign in.");
+
+    const confirmed = window.confirm("Are you sure you want to delete this file?");
+    if (!confirmed) return;
+
+    // Show loading state for the specific item being deleted
+    setItems(prevItems =>
+      prevItems.map(item =>
+        item.Key === fileKey
+          ? { ...item, isDeleting: true }
+          : item
+      )
+    );
+
+    try {
+      const res = await fetch(`${BASE_URL}/api/v1/uploads/s3`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ key: fileKey }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
+      const result = await res.json();
+
+      if (result.status === 1) {
+        // Optimistically remove from UI immediately
+        setItems(prevItems => prevItems.filter(item => item.Key !== fileKey));
+        alert("✅ File deleted successfully");
+      } else {
+        throw new Error(result.message || "Delete failed");
+      }
+    } catch (err) {
+      console.error("Delete error:", err);
+      alert("❌ Failed to delete file");
+
+      // Revert the loading state on error
+      setItems(prevItems =>
+        prevItems.map(item =>
+          item.Key === fileKey
+            ? { ...item, isDeleting: false }
+            : item
+        )
+      );
     }
   };
 
@@ -275,19 +351,53 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
               {items.map((item, index) => (
                 <li
                   key={index}
-                  onClick={() => window.open(item.Url, "_blank")}
                   style={{
                     padding: 8,
                     backgroundColor: "black",
                     borderRadius: 4,
-                    cursor: "pointer",
-                    userSelect: "none",
                     color: "white",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    minHeight: "32px",
+                    opacity: item.isDeleting ? 0.7 : 1, // Visual feedback for deleting state
                   }}
                 >
-                  <p style={{ wordWrap: "break-word", margin: 0 }}>
+                  <span
+                    onClick={() => window.open(item.Url, "_blank")}
+                    style={{
+                      cursor: "pointer",
+                      flex: 1,
+                      marginRight: 8,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      minWidth: 0,
+                    }}
+                    title={item.FileName}
+                  >
                     {item.FileName}
-                  </p>
+                  </span>
+                  <FiTrash
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(item.Key);
+                    }}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: item.isDeleting ? "#666" : "red",
+                      cursor: item.isDeleting ? "not-allowed" : "pointer",
+                      fontSize: 16,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "24px",
+                      height: "24px",
+                      opacity: item.isDeleting ? 0.5 : 1,
+                    }}
+                    title={item.isDeleting ? "Deleting..." : "Delete"}
+                  />
                 </li>
               ))}
             </ul>

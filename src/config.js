@@ -1,5 +1,5 @@
 const BASE_URL =
-  "https://ikfwwxazldg56elyxpxqutixd40kiecd.lambda-url.us-east-1.on.aws";
+  "https://mdzogc2o5ieq54ebed6oelcmfe0larkk.lambda-url.us-east-1.on.aws";
 
 // const BASE_URL = "http://localhost:3000";
 
