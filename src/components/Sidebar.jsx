@@ -41,7 +41,11 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
 
     setIsLoading(true);
     try {
-      console.log("File details:", { name: file.name, type: file.type, size: file.size });
+      console.log("File details:", {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+      });
 
       // Step 1: Get presigned URL
       const presignRes = await fetch(`${BASE_URL}/api/v1/uploads/s3`, {
@@ -54,7 +58,7 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
           key: file.name,
           fileType: file.type,
           // Add file size if your backend expects it
-          fileSize: file.size
+          fileSize: file.size,
         }),
       });
 
@@ -77,7 +81,11 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
         body: file,
       });
 
-      console.log("S3 upload response:", uploadRes.status, uploadRes.statusText);
+      console.log(
+        "S3 upload response:",
+        uploadRes.status,
+        uploadRes.statusText
+      );
 
       if (!uploadRes.ok) {
         const errorText = await uploadRes.text();
@@ -124,7 +132,6 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
       await refreshFileList();
       setUploadedFile(null);
       setPreviewUrl(null);
-
     } catch (err) {
       console.error("Upload error:", err);
       alert(`❌ Upload failed: ${err.message}`);
@@ -154,15 +161,15 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
     const token = Cookies.get("token");
     if (!token) return alert("Authentication token not found. Please sign in.");
 
-    const confirmed = window.confirm("Are you sure you want to delete this file?");
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this file?"
+    );
     if (!confirmed) return;
 
     // Show loading state for the specific item being deleted
-    setItems(prevItems =>
-      prevItems.map(item =>
-        item.Key === fileKey
-          ? { ...item, isDeleting: true }
-          : item
+    setItems((prevItems) =>
+      prevItems.map((item) =>
+        item.Key === fileKey ? { ...item, isDeleting: true } : item
       )
     );
 
@@ -184,7 +191,9 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
 
       if (result.status === 1) {
         // Optimistically remove from UI immediately
-        setItems(prevItems => prevItems.filter(item => item.Key !== fileKey));
+        setItems((prevItems) =>
+          prevItems.filter((item) => item.Key !== fileKey)
+        );
         alert("✅ File deleted successfully");
       } else {
         throw new Error(result.message || "Delete failed");
@@ -194,11 +203,9 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
       alert("❌ Failed to delete file");
 
       // Revert the loading state on error
-      setItems(prevItems =>
-        prevItems.map(item =>
-          item.Key === fileKey
-            ? { ...item, isDeleting: false }
-            : item
+      setItems((prevItems) =>
+        prevItems.map((item) =>
+          item.Key === fileKey ? { ...item, isDeleting: false } : item
         )
       );
     }
@@ -374,58 +381,64 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
               }}
             >
               {items.length === 0 && <li>No documents yet</li>}
-              {items.map((item, index) => (
-                <li
-                  key={index}
-                  style={{
-                    padding: 8,
-                    backgroundColor: "black",
-                    borderRadius: 4,
-                    color: "white",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    minHeight: "32px",
-                    opacity: item.isDeleting ? 0.7 : 1, // Visual feedback for deleting state
-                  }}
-                >
-                  <span
-                    onClick={() => window.open(item.Url, "_blank")}
+              {items.map((item, index) => {
+                // Encode the key to avoid special character issues in the URL
+                const encodedKey = encodeURIComponent(item.Key);
+                const fileUrl = `https://all-media-139546185096.s3.amazonaws.com/${encodedKey}`;
+
+                return (
+                  <li
+                    key={index}
                     style={{
-                      cursor: "pointer",
-                      flex: 1,
-                      marginRight: 8,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      minWidth: 0,
-                    }}
-                    title={item.FileName}
-                  >
-                    {item.FileName}
-                  </span>
-                  <FiTrash
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(item.Key);
-                    }}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: item.isDeleting ? "#666" : "red",
-                      cursor: item.isDeleting ? "not-allowed" : "pointer",
-                      fontSize: 16,
+                      padding: 8,
+                      backgroundColor: "black",
+                      borderRadius: 4,
+                      color: "white",
                       display: "flex",
+                      justifyContent: "space-between",
                       alignItems: "center",
-                      justifyContent: "center",
-                      width: "24px",
-                      height: "24px",
-                      opacity: item.isDeleting ? 0.5 : 1,
+                      minHeight: "32px",
+                      opacity: item.isDeleting ? 0.7 : 1,
                     }}
-                    title={item.isDeleting ? "Deleting..." : "Delete"}
-                  />
-                </li>
-              ))}
+                  >
+                    <span
+                      onClick={() => window.open(fileUrl, "_blank")}
+                      style={{
+                        cursor: "pointer",
+                        flex: 1,
+                        marginRight: 8,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        minWidth: 0,
+                      }}
+                      title={item.FileName}
+                    >
+                      {item.FileName}
+                    </span>
+                    <FiTrash
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(item.Key);
+                      }}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: item.isDeleting ? "#666" : "red",
+                        cursor: item.isDeleting ? "not-allowed" : "pointer",
+                        fontSize: 16,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "24px",
+                        height: "24px",
+                        opacity: item.isDeleting ? 0.5 : 1,
+                      }}
+                      title={item.isDeleting ? "Deleting..." : "Delete"}
+                    />
+                  </li>
+                );
+              })}
             </ul>
           </>
         )}
