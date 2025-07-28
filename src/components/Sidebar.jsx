@@ -17,7 +17,7 @@ import BASE_URL from "../config";
 
 // Constants
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
-const MAX_FILES_PER_UPLOAD = 10;
+const MAX_FILES_PER_UPLOAD = 100;
 const ALLOWED_FILE_TYPES = { "application/pdf": "pdf" };
 
 // Toast utility function
