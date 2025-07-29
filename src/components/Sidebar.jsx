@@ -6,9 +6,10 @@ import React, {
   useMemo,
 } from "react";
 import { TbSquareToggle } from "react-icons/tb";
-import { FiTrash, FiRefreshCw, FiX } from "react-icons/fi";
+import { FiTrash, FiRefreshCw, FiX, FiMessageSquare } from "react-icons/fi";
 import { BiTime, BiTrendingUp, BiMemoryCard } from "react-icons/bi";
 import { IoStatsChart } from "react-icons/io5";
+import { AiOutlineDelete, AiOutlineNumber } from "react-icons/ai";
 import Cookies from "js-cookie";
 import { useNavigate } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
@@ -284,6 +285,362 @@ const useMetrics = () => {
   );
 
   return { metrics, metricsLoading, lastUpdated, fetchMetrics, clearCache };
+};
+
+// 💬 Custom hook for chat operations
+const useChatOperations = () => {
+  const { apiCall } = useAPI();
+  const [chatCount, setChatCount] = useState(null);
+  const [chatCountLoading, setChatCountLoading] = useState(false);
+  const [deletingChats, setDeletingChats] = useState(false);
+
+  const getChatCount = useCallback(async () => {
+    try {
+      setChatCountLoading(true);
+      const response = await apiCall("/api/v1/chats/count");
+      setChatCount(response.data.totalChats);
+      return response.data.totalChats;
+    } catch (error) {
+      console.error("Failed to get chat count:", error);
+      setChatCount(null);
+      return null;
+    } finally {
+      setChatCountLoading(false);
+    }
+  }, [apiCall]);
+
+  const deleteAllChats = useCallback(async () => {
+    try {
+      setDeletingChats(true);
+      const response = await apiCall("/api/v1/chats/all", {
+        method: "DELETE",
+        body: JSON.stringify({ confirmDeletion: true }),
+      });
+
+      // Update chat count to 0 after successful deletion
+      setChatCount(0);
+      return response.data.deletedCount;
+    } catch (error) {
+      console.error("Failed to delete chats:", error);
+      throw error;
+    } finally {
+      setDeletingChats(false);
+    }
+  }, [apiCall]);
+
+  return {
+    chatCount,
+    chatCountLoading,
+    deletingChats,
+    getChatCount,
+    deleteAllChats,
+  };
+};
+
+// 💬 Chat Controls Component
+const ChatControlsSection = ({
+  chatCount,
+  onGetChatCount,
+  onDeleteAllChats,
+  chatCountLoading,
+  deletingChats,
+}) => {
+  const [showDetails, setShowDetails] = useState(false);
+
+  // UPDATED: In your Sidebar component, replace the handleDeleteChats function with this:
+
+  const handleDeleteChats = async () => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete all ${chatCount || "your"} chat${
+        chatCount !== 1 ? "s" : ""
+      }? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const deletedCount = await onDeleteAllChats();
+
+      // 🚀 NOTIFY CHAT COMPONENT ABOUT DELETION
+      // Method 1: Using window function (direct)
+      if (window.refreshChatsAfterDeletion) {
+        console.log("🔄 Calling chat refresh function directly...");
+        window.refreshChatsAfterDeletion();
+      }
+
+      // Method 2: Using custom event (backup)
+      const event = new CustomEvent("chatsDeleted", {
+        detail: {
+          deletedCount,
+          timestamp: new Date().toISOString(),
+        },
+      });
+      window.dispatchEvent(event);
+      console.log("📡 Dispatched chatsDeleted event");
+
+      showToast(
+        `Successfully deleted ${deletedCount} chat${
+          deletedCount !== 1 ? "s" : ""
+        }!`,
+        "success"
+      );
+    } catch (error) {
+      showToast(`Failed to delete chats: ${error.message}`, "error");
+    }
+  };
+
+  return (
+    <div
+      style={{
+        margin: "12px",
+        padding: "12px",
+        backgroundColor: "#2a2b32",
+        borderRadius: "8px",
+        border: "1px solid #3a3b42",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "12px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <FiMessageSquare style={{ fontSize: "18px", color: "#4a90e2" }} />
+          <h4 style={{ margin: 0, fontSize: "14px", color: "#e1e1e1" }}>
+            Chat History
+          </h4>
+        </div>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            onClick={() => setShowDetails(!showDetails)}
+            style={{
+              background: "linear-gradient(135deg, #3a3b42, #4a4b52)",
+              border: "none",
+              borderRadius: "6px",
+              color: "#e1e1e1",
+              padding: "6px 12px",
+              fontSize: "11px",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              fontWeight: "500",
+            }}
+            onMouseEnter={e => {
+              e.target.style.background =
+                "linear-gradient(135deg, #4a4b52, #5a5b62)";
+              e.target.style.color = "#fff";
+            }}
+            onMouseLeave={e => {
+              e.target.style.background =
+                "linear-gradient(135deg, #3a3b42, #4a4b52)";
+              e.target.style.color = "#e1e1e1";
+            }}
+          >
+            {showDetails ? "Hide" : "Details"}
+          </button>
+        </div>
+      </div>
+
+      {/* Quick Stats */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "8px",
+          marginBottom: showDetails ? "12px" : "0",
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: "#1a1b20",
+            padding: "8px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "16px",
+              fontWeight: "bold",
+              color: "#4a90e2",
+            }}
+          >
+            {chatCountLoading ? "..." : chatCount !== null ? chatCount : "?"}
+          </div>
+          <div style={{ fontSize: "10px", color: "#aaa" }}>Total Chats</div>
+        </div>
+        <div
+          style={{
+            backgroundColor: "#1a1b20",
+            padding: "8px",
+            borderRadius: "6px",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "16px",
+              fontWeight: "bold",
+              color: deletingChats ? "#666" : "#d73027",
+            }}
+          >
+            {deletingChats ? "..." : "🗑️"}
+          </div>
+          <div style={{ fontSize: "10px", color: "#aaa" }}>
+            {deletingChats ? "Deleting" : "Ready"}
+          </div>
+        </div>
+      </div>
+
+      {/* Detailed Controls */}
+      {showDetails && (
+        <div style={{ fontSize: "12px", color: "#ccc" }}>
+          {/* Chat Controls */}
+          <div style={{ marginBottom: "12px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                marginBottom: "6px",
+                color: "#e1e1e1",
+                fontWeight: "bold",
+              }}
+            >
+              <FiMessageSquare />
+              Chat Management
+            </div>
+
+            {/* Action Buttons */}
+            <div
+              style={{
+                display: "flex",
+                gap: "8px",
+                marginTop: "12px",
+              }}
+            >
+              <button
+                onClick={onGetChatCount}
+                disabled={chatCountLoading}
+                style={{
+                  flex: 1,
+                  background: chatCountLoading
+                    ? "linear-gradient(135deg, #666, #777)"
+                    : "linear-gradient(135deg, #3a3b42, #4a4b52)",
+                  border: "none",
+                  borderRadius: "6px",
+                  color: "#e1e1e1",
+                  padding: "8px 4px",
+                  fontSize: "10px",
+                  cursor: chatCountLoading ? "not-allowed" : "pointer",
+                  transition: "all 0.2s ease",
+                  fontWeight: "500",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "4px",
+                  opacity: chatCountLoading ? 0.6 : 1,
+                }}
+                onMouseEnter={e => {
+                  if (!chatCountLoading) {
+                    e.target.style.background =
+                      "linear-gradient(135deg, #4a4b52, #5a5b62)";
+                    e.target.style.transform = "translateY(-1px)";
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!chatCountLoading) {
+                    e.target.style.background =
+                      "linear-gradient(135deg, #3a3b42, #4a4b52)";
+                    e.target.style.transform = "translateY(0)";
+                  }
+                }}
+              >
+                <AiOutlineNumber style={{ fontSize: "12px" }} />
+                {chatCountLoading ? "Counting..." : "Get Count"}
+              </button>
+
+              <button
+                onClick={handleDeleteChats}
+                disabled={deletingChats || chatCount === 0}
+                style={{
+                  flex: 1,
+                  background:
+                    deletingChats || chatCount === 0
+                      ? "linear-gradient(135deg, #666, #777)"
+                      : "linear-gradient(135deg, #d73027, #b71c1c)",
+                  border: "none",
+                  borderRadius: "6px",
+                  color: "white",
+                  padding: "8px 4px",
+                  fontSize: "10px",
+                  cursor:
+                    deletingChats || chatCount === 0
+                      ? "not-allowed"
+                      : "pointer",
+                  transition: "all 0.2s ease",
+                  fontWeight: "500",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "4px",
+                  opacity: deletingChats || chatCount === 0 ? 0.6 : 1,
+                }}
+                onMouseEnter={e => {
+                  if (!deletingChats && chatCount > 0) {
+                    e.target.style.background =
+                      "linear-gradient(135deg, #b71c1c, #a00000)";
+                    e.target.style.transform = "translateY(-1px)";
+                    e.target.style.boxShadow =
+                      "0 4px 8px rgba(215, 48, 39, 0.3)";
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!deletingChats && chatCount > 0) {
+                    e.target.style.background =
+                      "linear-gradient(135deg, #d73027, #b71c1c)";
+                    e.target.style.transform = "translateY(0)";
+                    e.target.style.boxShadow = "none";
+                  }
+                }}
+              >
+                <AiOutlineDelete style={{ fontSize: "12px" }} />
+                {deletingChats
+                  ? "Deleting..."
+                  : chatCount === 0
+                  ? "No Chats"
+                  : "Delete All"}
+              </button>
+            </div>
+
+            {/* Chat Count Info */}
+            {chatCount !== null && (
+              <div
+                style={{
+                  textAlign: "center",
+                  fontSize: "11px",
+                  color: "#888",
+                  marginTop: "8px",
+                  padding: "6px",
+                  backgroundColor: "#1a1b20",
+                  borderRadius: "4px",
+                }}
+              >
+                {chatCount === 0
+                  ? "No chat history found"
+                  : `You have ${chatCount} chat${
+                      chatCount !== 1 ? "s" : ""
+                    } stored`}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 // 📊 Metrics Display Component - Same as before
@@ -940,6 +1297,15 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
   const { metrics, metricsLoading, lastUpdated, fetchMetrics, clearCache } =
     useMetrics();
 
+  // 💬 Add chat functionality
+  const {
+    chatCount,
+    chatCountLoading,
+    deletingChats,
+    getChatCount,
+    deleteAllChats,
+  } = useChatOperations();
+
   const resetFileInput = () => {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -961,6 +1327,8 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
         await refreshFileList();
         // 📊 Fetch metrics on load
         await fetchMetrics();
+        // 💬 Fetch chat count on load
+        await getChatCount();
       } catch (err) {
         setError(err.message);
       } finally {
@@ -968,7 +1336,7 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
       }
     };
     load();
-  }, [token, userId, refreshFileList, fetchMetrics]);
+  }, [token, userId, refreshFileList, fetchMetrics, getChatCount]);
 
   // 📊 Auto-refresh metrics every 30 seconds
   useEffect(() => {
@@ -1146,6 +1514,21 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
     }
   };
 
+  // 💬 Handle chat count refresh with user feedback
+  const handleGetChatCount = async () => {
+    try {
+      const count = await getChatCount();
+      if (count !== null) {
+        showToast(
+          `Found ${count} chat${count !== 1 ? "s" : ""} in history`,
+          "info"
+        );
+      }
+    } catch (error) {
+      showToast("Failed to get chat count. Please try again.", "error");
+    }
+  };
+
   if (!token || !userData) return null;
 
   return (
@@ -1285,6 +1668,15 @@ export default function Sidebar({ isOpen, onClose, onNewChat }) {
           onClearCache={handleClearCache}
           loading={metricsLoading}
           lastUpdated={lastUpdated}
+        />
+
+        {/* 💬 Chat Controls Section */}
+        <ChatControlsSection
+          chatCount={chatCount}
+          onGetChatCount={handleGetChatCount}
+          onDeleteAllChats={deleteAllChats}
+          chatCountLoading={chatCountLoading}
+          deletingChats={deletingChats}
         />
 
         {/* File Selection Preview */}

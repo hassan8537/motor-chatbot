@@ -421,13 +421,47 @@ export default function Chat({ onOpenSidebar, sidebarOpen }) {
     }
   }, [token, fetchChats]);
 
-  // Add to window for external access (like from sidebar)
+  // 🗑️ UPDATED: Handle chat deletion refresh
+  const handleChatDeletionRefresh = useCallback(() => {
+    console.log("🗑️ Chat deletion detected, refreshing chat list...");
+
+    // Clear current chats and reset pagination
+    setMyChats([]);
+    setNextPageToken(null);
+    setHasMoreChats(true);
+    setScrollPosition(0);
+
+    // Refresh chats from server
+    if (token) {
+      fetchChats(false, true);
+    }
+  }, [token, fetchChats]);
+
+  // 🌐 UPDATED: Add to window for external access (from sidebar)
   useEffect(() => {
     window.startNewChat = handleNewChat;
+    window.refreshChatsAfterDeletion = handleChatDeletionRefresh; // NEW
+
     return () => {
       delete window.startNewChat;
+      delete window.refreshChatsAfterDeletion; // Clean up
     };
-  }, [handleNewChat]);
+  }, [handleNewChat, handleChatDeletionRefresh]);
+
+  // 📡 UPDATED: Listen for custom events from sidebar
+  useEffect(() => {
+    const handleChatDeletion = event => {
+      console.log("🗑️ Received chat deletion event:", event.detail);
+      handleChatDeletionRefresh();
+    };
+
+    // Listen for custom event from sidebar
+    window.addEventListener("chatsDeleted", handleChatDeletion);
+
+    return () => {
+      window.removeEventListener("chatsDeleted", handleChatDeletion);
+    };
+  }, [handleChatDeletionRefresh]);
 
   return (
     <main
@@ -626,7 +660,7 @@ export default function Chat({ onOpenSidebar, sidebarOpen }) {
                           color: "#bbb",
                         }}
                       >
-                        <strong style={{ color: "#e1e1e1" }}>
+                        {/* <strong style={{ color: "#e1e1e1" }}>
                           📚 Sources ({item.Sources.length}):
                         </strong>
                         <ul
@@ -643,7 +677,7 @@ export default function Chat({ onOpenSidebar, sidebarOpen }) {
                               Relevance: {source.Score || "N/A"})
                             </li>
                           ))}
-                        </ul>
+                        </ul> */}
                       </div>
                     )}
 
